@@ -8,6 +8,7 @@ import numpy as np
 # Cargar modelo
 import tensorflow as tf
 new_model = tf.keras.models.load_model('model5.keras')
+scaler = pickle.load(open("scaler.pkl", 'rb'))
 new_model.summary()
 print(new_model.summary())
 
@@ -168,15 +169,16 @@ app.layout = html.Div([
 
     # Resultado de predicción
     html.Div(id='prediction-output', style={'margin-top': '20px'}),
+    html.Div(id='income-output', style={'margin-top': '20px'}),
 
-    # Gráfica de Ingresos
-    dcc.Graph(id='income-graph')
+
+
 ])
 
 # Callback para predecir suscripción y graficar ingresos
 @app.callback(
     Output('prediction-output', 'children'),
-    Output('income-graph', 'figure'),
+    Output('income-output', 'children'),
     Input('predict-button', 'n_clicks'),
     State('age', 'value'),
     State('default', 'value'),
@@ -230,7 +232,7 @@ def predict_subscription(n_clicks, age, default, housing, loan, day, duration, c
         'marital_married': marital_married,
         'education_primary': education_primary,
         'education_tertiary': education_tertiary,
-        'contact': contact,
+        
         'contacted': contacted
     })
     
@@ -240,9 +242,10 @@ def predict_subscription(n_clicks, age, default, housing, loan, day, duration, c
 # Verificar tipos de datos
     print("Tipos de datos en user_data:")
     print(user_data.dtypes)
-
+    
     # Convertir tipos de datos a float32
     user_data = user_data.astype(np.float32)
+
 
     # Verificar si hay valores NaN
     if user_data.isnull().values.any():
@@ -254,13 +257,23 @@ def predict_subscription(n_clicks, age, default, housing, loan, day, duration, c
     print(user_data)
 
     # Realizar la predicción
-    prob = new_model(user_data)[:, 1]  # Asumimos que devuelve la probabilidad de suscripción
+    user_data = user_data[['age','default','balance','housing','loan','day','duration','campaign','pdays','job_admin.','job_blue-collar','job_entrepreneur','job_housemaid','job_management','job_retired','job_self-employed','job_services','job_student','job_technician','job_unemployed','job_unknown','marital_divorced','marital_married','education_primary','education_tertiary','contact_cellular','contact_telephone','contact_unknown','poutcome_failure','poutcome_other','poutcome_success','poutcome_unknown','contacted']]
+    user_data=scaler.transform(user_data)
+    prob = new_model(user_data)[:, 0].numpy()  # Asumimos que devuelve la probabilidad de suscripción
+    print(prob)
     prediction = "Apto para suscripción" if prob >= 0.2 else "No apto para suscripción"
-    prediction_text = f"Resultado de predicción: {prediction} (Probabilidad: {prob[0]:.2f})"
+    prediction_text = f"Resultado de predicción: {prediction} (Probabilidad: {prob[0]:.5f})"
     
     # Gráfica de ingresos (average_balance)
-    user_data['balance'] = average_balance  # Actualizar los datos con el valor de entrada
-   
+    price = 0.2 * balance
+    cost_contact =3
+    tp =843
+    fp = 1090
+    fn = 248
+    income = ((price - cost_contact) * (tp / 100)) + (-cost_contact * (fp / 100)) + (-price * (fn / 100))
+
+    return prediction_text, f"El ingreso especifico de este usuario es {income}"
+
 if __name__ == '__main__':
     app.run_server(debug=True)
 
